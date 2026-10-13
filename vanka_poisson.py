@@ -15,16 +15,14 @@ gives an SPD preconditioner.
 
 import argparse
 
-from mpi4py import MPI
-from petsc4py import PETSc
-
-import networkx as nx
-import numpy as np
-
 import basix.ufl
 import dolfinx
 import dolfinx.fem.petsc
+import networkx as nx
+import numpy as np
 import ufl
+from mpi4py import MPI
+from petsc4py import PETSc
 
 
 # From https://gist.github.com/jorgensd/1e3d89b8c46a05fce36eb2fe88cfe9a6
@@ -60,7 +58,9 @@ def ghost_by_vertex(msh):
     # index map, whose local ranges are that same running count
     geometry = msh.geometry
     node_map = geometry.index_map()
-    nodes = node_map.local_to_global(geometry.dofmaps[0][:num_owned].reshape(-1).astype(np.int32))
+    nodes = node_map.local_to_global(
+        geometry.dofmaps[0][:num_owned].reshape(-1).astype(np.int32)
+    )
     domain = ufl.Mesh(
         basix.ufl.element(
             "Lagrange",
@@ -151,7 +151,9 @@ def color_islands(msh, cell_islands, strategy):
     if strategy == "local":
         coloring = greedy(G)
         colors = np.array([coloring[k] for k in range(num_islands)], dtype=np.int32)
-        num_colors = comm.allreduce(int(colors.max()) + 1 if num_islands > 0 else 0, op=MPI.MAX)
+        num_colors = comm.allreduce(
+            int(colors.max()) + 1 if num_islands > 0 else 0, op=MPI.MAX
+        )
         return colors, num_colors
 
     # Cells that another rank also holds
@@ -230,7 +232,9 @@ class ColorSolver:
         sub_cells = np.arange(smap.size_local + smap.num_ghosts, dtype=np.int32)
         parent_cells = entity_map.sub_topology_to_topology(sub_cells, inverse=False)
         idx_c.interpolate(idx, cells0=parent_cells, cells1=sub_cells)
-        self.sub_to_parent = imap.global_to_local(np.rint(idx_c.x.array).astype(np.int64))
+        self.sub_to_parent = imap.global_to_local(
+            np.rint(idx_c.x.array).astype(np.int64)
+        )
         assert np.all(self.sub_to_parent >= 0)
 
         if solve_dofs is None:
@@ -443,7 +447,9 @@ def create_macro_vanka(V, A, bc_dofs, cells_per_island, coloring, boundary="isla
         cells = np.unique(np.concatenate([island_cells[k] for k in ks] or [empty]))
         solve = None
         if boundary == "island":
-            solve = np.concatenate([island_interior(island_cells[k]) for k in ks] or [empty])
+            solve = np.concatenate(
+                [island_interior(island_cells[k]) for k in ks] or [empty]
+            )
         solvers.append(ColorSolver(V, cells.astype(np.int32), bc_dofs, solve))
         stats.append(
             (
@@ -472,9 +478,13 @@ def main(n, degree, cells_per_island, coloring, boundary):
     dtype = PETSc.ScalarType
     _, V, _, A, b, bc, u_ex = create_problem(comm, n, degree)
     bc_dofs = bc.dof_indices()[0]
-    vanka, solvers, stats = create_macro_vanka(V, A, bc_dofs, cells_per_island, coloring, boundary)
+    vanka, solvers, stats = create_macro_vanka(
+        V, A, bc_dofs, cells_per_island, coloring, boundary
+    )
     if comm.rank == 0:
-        print(f"P{degree}, n={n}, ranks={comm.size}, dofs={V.dofmap.index_map.size_global}")
+        print(
+            f"P{degree}, n={n}, ranks={comm.size}, dofs={V.dofmap.index_map.size_global}"
+        )
         print(f"{len(stats)} colors ({coloring}), (islands, cells) per color: {stats}")
 
     # Smoother: Richardson from a random guess, b = 0
@@ -532,7 +542,9 @@ def main(n, degree, cells_per_island, coloring, boundary):
         uh.x.scatter_forward()
         e = np.sqrt(comm.allreduce(dolfinx.fem.assemble_scalar(err), op=MPI.SUM).real)
         if comm.rank == 0:
-            print(f"CG + {name:10s}: {ksp.getIterationNumber():4d} its, L2 error {e:.3e}")
+            print(
+                f"CG + {name:10s}: {ksp.getIterationNumber():4d} its, L2 error {e:.3e}"
+            )
         ksp.destroy()
 
     vanka.free()
@@ -550,7 +562,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--cells-per-island", type=int, default=32, help="0: one vertex star per island"
     )
-    parser.add_argument("--coloring", choices=["rank-offset", "local"], default="rank-offset")
+    parser.add_argument(
+        "--coloring", choices=["rank-offset", "local"], default="rank-offset"
+    )
     parser.add_argument("--boundary", choices=["island", "color"], default="island")
     args = parser.parse_args()
     main(args.n, args.degree, args.cells_per_island, args.coloring, args.boundary)

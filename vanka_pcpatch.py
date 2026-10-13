@@ -19,15 +19,14 @@ reaches two vertex layers, so the mesh is ghosted by vertex twice.
 import argparse
 import time
 
+import cffi
+import dolfinx
+import dolfinx.fem.petsc
+import numpy as np
+import ufl
 from mpi4py import MPI
 from petsc4py import PETSc
 
-import cffi
-import numpy as np
-
-import dolfinx
-import dolfinx.fem.petsc
-import ufl
 from vanka_poisson import create_macro_vanka, create_problem
 
 
@@ -68,7 +67,9 @@ def create_plex(msh):
     for d in range(1, tdim + 1):
         conn = topology.connectivity(d, d - 1)
         for e in range(sizes[d]):
-            plex.setCone(offsets[d] + e, (offsets[d - 1] + conn.links(e)).astype(PETSc.IntType))
+            plex.setCone(
+                offsets[d] + e, (offsets[d - 1] + conn.links(e)).astype(PETSc.IntType)
+            )
     plex.symmetrize()
     plex.stratify()
 
@@ -81,7 +82,9 @@ def create_plex(msh):
         owners = imap.owners
         leaves.append(offsets[d] + imap.size_local + np.arange(imap.num_ghosts))
         root_offset = np.array([all_offsets[r][d] for r in owners], dtype=np.int64)
-        remotes.append(np.column_stack([owners, root_offset + imap.ghosts - starts[owners]]))
+        remotes.append(
+            np.column_stack([owners, root_offset + imap.ghosts - starts[owners]])
+        )
     sf = PETSc.SF().create(comm=comm)
     sf.setGraph(
         num_points,
@@ -149,7 +152,9 @@ def attach_dofs(plex, offsets, V):
     owner[dof_of_sec >= n_own] = imap.owners[dof_of_sec[dof_of_sec >= n_own] - n_own]
     root = imap.local_to_global(dof_of_sec.astype(np.int32)) - starts[owner]
     sf = PETSc.SF().create(comm=comm)
-    sf.setGraph(n_own, None, np.column_stack([owner, root]).reshape(-1).astype(PETSc.IntType))
+    sf.setGraph(
+        n_own, None, np.column_stack([owner, root]).reshape(-1).astype(PETSc.IntType)
+    )
     plex.setLocalSection(section)
     plex.setSectionSF(sf)
     return sec_of_dof
@@ -161,7 +166,9 @@ def element_tensors(a, V):
     msh = V.mesh
     dtype = PETSc.ScalarType
     ffi = cffi.FFI()
-    kernel = getattr(a.ufcx_form.form_integrals[0], f"tabulate_tensor_{np.dtype(dtype).name}")
+    kernel = getattr(
+        a.ufcx_form.form_integrals[0], f"tabulate_tensor_{np.dtype(dtype).name}"
+    )
     num_cells, nd = V.dofmap.list.shape
     Ae = np.zeros((num_cells, nd, nd), dtype=dtype)
     x, x_dofs = msh.geometry.x, msh.geometry.dofmaps[0]
@@ -360,9 +367,13 @@ def main(n, degree):
         ksp.destroy()
 
     if comm.rank == 0:
-        print(f"P{degree}, n={n}, ranks={comm.size}, dofs={V.dofmap.index_map.size_global}")
+        print(
+            f"P{degree}, n={n}, ranks={comm.size}, dofs={V.dofmap.index_map.size_global}"
+        )
         for k, (_, _, stats) in macro.items():
-            print(f"MacroVanka/{k}: {len(stats)} colors, (islands, cells) per color: {stats}")
+            print(
+                f"MacroVanka/{k}: {len(stats)} colors, (islands, cells) per color: {stats}"
+            )
         header = ("method", "rate", "CG its", "setup s", "CG s", "L2 err")
         print("{:30s} {:>8s} {:>7s} {:>8s} {:>7s} {:>9s}".format(*header))
         for method, rate, its, ts, tc, e in rows:
